@@ -1,0 +1,7 @@
+/terraform-provider-uplapse
+/dist/
+.go/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

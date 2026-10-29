@@ -1,0 +1,26 @@
+# go vet + go test. The resource tests drive a real terraform binary against an in-process mock API, so the job
+# installs one; nothing here talks to a live Uplapse environment.
+stages:
+  - test
+
+variables:
+  TERRAFORM_VERSION: "1.16.6"
+  GOPATH: "$CI_PROJECT_DIR/.go"
+  GOFLAGS: "-mod=readonly"
+
+test:
+  stage: test
+  image: golang:1.26
+  cache:
+    key:
+      files: [go.sum]
+    paths:
+      - .go/pkg/mod/
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq unzip >/dev/null
+    - curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+    - unzip -o -q /tmp/terraform.zip -d /usr/local/bin && terraform version
+  script:
+    - go vet ./...
+    - go test -count=1 ./...
+    - go build -o /dev/null .
