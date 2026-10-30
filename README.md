@@ -31,6 +31,9 @@ resource "uplapse_monitor" "website" {
 
 Full reference: [`docs/`](docs/) (generated, registry layout). Examples: [`examples/`](examples/).
 
+For a whole domain at once (website, certificate, domain registration, email authentication, mail servers and
+heartbeats), use the `uplapse/website/uplapse` module (repository `terraform-uplapse-website`).
+
 ## Authentication
 
 Create an API key under **Settings > API keys** in the app and pass it as `api_key` or `UPLAPSE_API_KEY`. The key's
