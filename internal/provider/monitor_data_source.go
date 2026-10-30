@@ -39,6 +39,10 @@ type monitorDataModel struct {
 	Status         types.String `tfsdk:"status"`
 	Paused         types.Bool   `tfsdk:"paused"`
 	Tags           types.Set    `tfsdk:"tags"`
+
+	MailProtocol       types.String `tfsdk:"mail_protocol"`
+	RequiredMtaStsMode types.String `tfsdk:"required_mta_sts_mode"`
+	CheckBlacklists    types.Bool   `tfsdk:"check_blacklists"`
 }
 
 func (d *monitorDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -62,6 +66,11 @@ func (d *monitorDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"status":          schema.StringAttribute{Computed: true, MarkdownDescription: "`ACTIVE` or `SUSPENDED`."},
 			"paused":          schema.BoolAttribute{Computed: true, MarkdownDescription: "Whether the monitor is paused."},
 			"tags":            schema.SetAttribute{Computed: true, ElementType: types.StringType, MarkdownDescription: "Tags."},
+			"mail_protocol":   schema.StringAttribute{Computed: true, MarkdownDescription: "`MAIL_SERVER`: protocol checked."},
+			"required_mta_sts_mode": schema.StringAttribute{Computed: true,
+				MarkdownDescription: "`MAIL_AUTH`: MTA-STS mode required, if any."},
+			"check_blacklists": schema.BoolAttribute{Computed: true,
+				MarkdownDescription: "`MAIL_AUTH`: whether mail server addresses are checked against IP blacklists."},
 		},
 	}
 }
@@ -113,7 +122,8 @@ func (d *monitorDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		ID: types.StringValue(strconv.FormatInt(m.ID, 10)), Name: full.Name, Type: full.Type, URL: full.URL,
 		Port: full.Port, Interval: full.Interval, Timeout: full.Timeout, Locations: full.Locations,
 		Keyword: full.Keyword, ExpectedStatus: full.ExpectedStatus, Status: full.Status, Paused: full.Paused,
-		Tags: full.Tags,
+		Tags: full.Tags, MailProtocol: full.MailProtocol, RequiredMtaStsMode: full.RequiredMtaStsMode,
+		CheckBlacklists: full.CheckBlacklists,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &out)...)
 }

@@ -68,8 +68,8 @@ func (r *monitorResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"url": schema.StringAttribute{
 				MarkdownDescription: "What to check: an `http(s)://` address for HTTP-family types, a host name for " +
-					"`PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `DOMAIN_EXPIRY`. Required for every type except `HEARTBEAT`. " +
-					"Hosts on internal networks are refused.",
+					"`PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `DOMAIN_EXPIRY` and `MAIL_SERVER`, a domain for `MAIL_AUTH`. " +
+					"Required for every type except `HEARTBEAT`. Hosts on internal networks are refused.",
 				Optional:   true,
 				Validators: []validator.String{stringvalidator.LengthBetween(1, 255)},
 			},
@@ -82,11 +82,12 @@ func (r *monitorResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"port": schema.Int64Attribute{
-				MarkdownDescription: "Port. Required for `PORT` and `TCP`; `HTTPS` monitors default to 443 or 80 from the URL scheme.",
-				Optional:            true,
-				Computed:            true,
-				Validators:          []validator.Int64{int64validator.Between(1, 65535)},
-				PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				MarkdownDescription: "Port. Required for `PORT` and `TCP`; `HTTPS` monitors default to 443 or 80 from the URL scheme, " +
+					"`MAIL_SERVER` monitors to the protocol's port (587, 465, 143, 993, 110 or 995). Port 25 cannot be monitored.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(1, 65535)},
+				PlanModifiers: []planmodifier.Int64{defaultPortWhileUnchanged{}},
 			},
 			"interval": schema.Int64Attribute{
 				MarkdownDescription: "Seconds between checks (1-86400). Defaults to the plan's shortest interval; " +
@@ -171,6 +172,26 @@ func (r *monitorResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				Sensitive:           true,
 				PlanModifiers:       []planmodifier.String{useStateWhileTypeUnchanged{}},
+			},
+			"mail_protocol": schema.StringAttribute{
+				MarkdownDescription: "`MAIL_SERVER`: the protocol to check: `" + strings.Join(client.MailProtocolNames, "`, `") + "`. " +
+					"The check reads the greeting, sets up TLS (STARTTLS on `SUBMISSION`, `IMAP` and `POP3`) and checks the certificate. " +
+					"With a username and password set in the app (Advanced > Authentication) it also logs in; it never sends or reads mail.",
+				Optional:   true,
+				Validators: []validator.String{stringvalidator.OneOf(client.MailProtocolNames...)},
+			},
+			"required_mta_sts_mode": schema.StringAttribute{
+				MarkdownDescription: "`MAIL_AUTH`: fail unless the domain publishes MTA-STS in at least this mode: `testing` or `enforce`. " +
+					"Left out, MTA-STS is reported but not required.",
+				Optional:   true,
+				Validators: []validator.String{stringvalidator.OneOf(client.MtaStsModes...)},
+			},
+			"check_blacklists": schema.BoolAttribute{
+				MarkdownDescription: "`MAIL_AUTH`: also fail when one of the domain's mail server addresses is on a public IP blacklist " +
+					"(SpamCop, Barracuda, PSBL, Mailspike, UCEPROTECT level 1, DroneBL).",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
 			},
 			"track_config_changes": schema.BoolAttribute{
 				MarkdownDescription: "Record DNS, TLS and security-header snapshots and report changes between checks.",
@@ -274,6 +295,28 @@ func (r *monitorResource) ValidateConfig(ctx context.Context, req resource.Valid
 	if (typ == "PORT" || typ == "TCP") && m.Port.IsNull() {
 		resp.Diagnostics.AddAttributeError(path.Root("port"), "Missing port", "port is required for "+typ+" monitors.")
 	}
+	if typ == "MAIL_SERVER" {
+		if m.MailProtocol.IsNull() {
+			resp.Diagnostics.AddAttributeError(path.Root("mail_protocol"), "Missing mail_protocol", "mail_protocol is required for MAIL_SERVER monitors.")
+		}
+		if !m.Port.IsNull() && !m.Port.IsUnknown() && m.Port.ValueInt64() == 25 {
+			resp.Diagnostics.AddAttributeError(path.Root("port"), "Port 25 cannot be monitored",
+				"The checking locations' cloud providers block port 25. Check the submission port (587 or 465), "+
+					"or check inbound mail with a MAIL_AUTH monitor.")
+		}
+	} else if !m.MailProtocol.IsNull() {
+		resp.Diagnostics.AddAttributeError(path.Root("mail_protocol"), "mail_protocol not used", "mail_protocol only applies to MAIL_SERVER monitors.")
+	}
+	if typ != "MAIL_AUTH" {
+		if !m.RequiredMtaStsMode.IsNull() {
+			resp.Diagnostics.AddAttributeError(path.Root("required_mta_sts_mode"), "required_mta_sts_mode not used",
+				"required_mta_sts_mode only applies to MAIL_AUTH monitors.")
+		}
+		if !m.CheckBlacklists.IsNull() && !m.CheckBlacklists.IsUnknown() && m.CheckBlacklists.ValueBool() {
+			resp.Diagnostics.AddAttributeError(path.Root("check_blacklists"), "check_blacklists not used",
+				"check_blacklists only applies to MAIL_AUTH monitors.")
+		}
+	}
 	if typ == "KEYWORD" && m.Keyword.IsNull() {
 		resp.Diagnostics.AddAttributeError(path.Root("keyword"), "Missing keyword", "keyword is required for KEYWORD monitors.")
 	}
@@ -367,6 +410,8 @@ func (r *monitorResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// The port is unknown only when defaultPortWhileUnchanged let the API choose it again.
+	in.ResetPort = plan.Port.IsUnknown()
 	updated, err := r.client.UpdateMonitor(ctx, id, in)
 	if err != nil {
 		resp.Diagnostics.AddError("Could not update monitor", err.Error())
@@ -469,4 +514,46 @@ func (useStateWhileTypeUnchanged) PlanModifyString(ctx context.Context, req plan
 	if planType.Equal(stateType) {
 		resp.PlanValue = req.StateValue
 	}
+}
+
+// defaultPortWhileUnchanged keeps an API-chosen port from state while nothing it was chosen from changes: the type,
+// the URL scheme (HTTPS: 443 or 80) and the mail protocol (MAIL_SERVER). When one of them changes, an unset port is
+// left unknown so the API picks the new default.
+type defaultPortWhileUnchanged struct{}
+
+func (defaultPortWhileUnchanged) Description(context.Context) string {
+	return "kept from state while the type, URL scheme and mail protocol are unchanged"
+}
+func (m defaultPortWhileUnchanged) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (defaultPortWhileUnchanged) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if req.StateValue.IsNull() || req.State.Raw.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	var planType, stateType, planProto, stateProto, planURL, stateURL types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("type"), &planType)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("type"), &stateType)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("mail_protocol"), &planProto)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("mail_protocol"), &stateProto)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("url"), &planURL)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("url"), &stateURL)...)
+	if planType.IsUnknown() || planProto.IsUnknown() || planURL.IsUnknown() {
+		return
+	}
+	if planType.Equal(stateType) && planProto.Equal(stateProto) && urlScheme(planURL) == urlScheme(stateURL) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// urlScheme is the lower-case scheme of an address, or "" for a bare host name.
+func urlScheme(u types.String) string {
+	if u.IsNull() {
+		return ""
+	}
+	if i := strings.Index(u.ValueString(), "://"); i >= 0 {
+		return strings.ToLower(u.ValueString()[:i])
+	}
+	return ""
 }

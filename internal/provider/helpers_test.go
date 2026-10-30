@@ -8,3 +8,5 @@ import (
 func tfjsonPath(name string) tfjsonpath.Path { return tfjsonpath.New(name) }
 
 func knownString(s string) knownvalue.Check { return knownvalue.StringExact(s) }
+
+func knownInt(i int64) knownvalue.Check { return knownvalue.Int64Exact(i) }

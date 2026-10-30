@@ -31,13 +31,16 @@ output "existing_status" {
 
 ### Read-Only
 
+- `check_blacklists` (Boolean) `MAIL_AUTH`: whether mail server addresses are checked against IP blacklists.
 - `expected_status` (Number) Expected HTTP status.
 - `interval` (Number) Seconds between checks.
 - `keyword` (String) Required keyword.
 - `locations` (Set of Number) City ids checked from.
+- `mail_protocol` (String) `MAIL_SERVER`: protocol checked.
 - `name` (String) Monitor name.
 - `paused` (Boolean) Whether the monitor is paused.
 - `port` (Number) Port.
+- `required_mta_sts_mode` (String) `MAIL_AUTH`: MTA-STS mode required, if any.
 - `status` (String) `ACTIVE` or `SUSPENDED`.
 - `tags` (Set of String) Tags.
 - `timeout` (Number) Check timeout in seconds.

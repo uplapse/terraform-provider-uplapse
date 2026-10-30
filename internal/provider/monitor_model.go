@@ -36,6 +36,9 @@ type monitorModel struct {
 	MinDomainDaysLeft     types.Int64  `tfsdk:"min_domain_days_left"`
 	HeartbeatGraceSeconds types.Int64  `tfsdk:"heartbeat_grace_seconds"`
 	HeartbeatURL          types.String `tfsdk:"heartbeat_url"`
+	MailProtocol          types.String `tfsdk:"mail_protocol"`
+	RequiredMtaStsMode    types.String `tfsdk:"required_mta_sts_mode"`
+	CheckBlacklists       types.Bool   `tfsdk:"check_blacklists"`
 	TrackConfigChanges    types.Bool   `tfsdk:"track_config_changes"`
 	Paused                types.Bool   `tfsdk:"paused"`
 	Status                types.String `tfsdk:"status"`
@@ -82,6 +85,9 @@ func (m *monitorModel) toInput(ctx context.Context) (*client.MonitorInput, diag.
 		ExpectedDNS:         strPtr(m.ExpectedDNS),
 		MinTLSDaysLeft:      intPtr(m.MinTLSDaysLeft),
 		MinDomainDaysLeft:   intPtr(m.MinDomainDaysLeft),
+		MailProtocol:        strPtr(m.MailProtocol),
+		RequiredMtaStsMode:  strPtr(m.RequiredMtaStsMode),
+		CheckBlacklists:     boolPtr(m.CheckBlacklists),
 		LocationTargetType:  strPtr(m.LocationTargetType),
 		LocationTargetValue: strPtr(m.LocationTargetValue),
 		Locations:           []client.City{},
@@ -173,6 +179,9 @@ func (m *monitorModel) apply(ctx context.Context, api *client.Monitor, importing
 	m.MinTLSDaysLeft = intValue(api.MinTLSDaysLeft)
 	m.MinDomainDaysLeft = intValue(api.MinDomainDaysLeft)
 	m.HeartbeatGraceSeconds = intValue(api.HeartbeatGraceSeconds)
+	m.MailProtocol = strValue(api.MailProtocol)
+	m.RequiredMtaStsMode = strValue(api.RequiredMtaStsMode)
+	m.CheckBlacklists = types.BoolValue(api.CheckBlacklists != nil && *api.CheckBlacklists)
 	m.TrackConfigChanges = types.BoolValue(api.TrackConfigChanges)
 	m.Status = types.StringValue(api.Status)
 	m.Paused = types.BoolValue(api.Status == client.StatusSuspended)

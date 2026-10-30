@@ -250,6 +250,13 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request, id int64) {
 }
 
 // normalize applies MonitorService.save's validation and defaults. existing is nil on create.
+// Validate runs a new monitor through the API's rules without storing it: 0 when accepted, else the status code.
+func (s *Server) Validate(in map[string]any) (int, any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.normalize(deepCopy(in), nil)
+}
+
 func (s *Server) normalize(in, existing map[string]any) (int, any) {
 	name, _ := in["name"].(string)
 	name = strings.TrimSpace(name)
@@ -328,6 +335,41 @@ func (s *Server) normalize(in, existing map[string]any) (int, any) {
 	if iv, ok := in["interval"].(float64); ok && s.MinInterval > 0 && int(iv) < s.MinInterval {
 		return 400, map[string]any{"code": 50020, "message": fmt.Sprintf("Plan Free enforces a minimum check interval of %d seconds.", s.MinInterval)}
 	}
+	// Mail settings (MonitorService.validateMailSettings).
+	if typ == "MAIL_SERVER" {
+		proto, _ := in["mailProtocol"].(string)
+		proto = strings.ToUpper(strings.TrimSpace(proto))
+		def, ok := mailPorts[proto]
+		if !ok {
+			return 400, errBody(400, "BAD_REQUEST", "mailProtocol must be one of SUBMISSION, SMTPS, IMAP, IMAPS, POP3, POP3S")
+		}
+		in["mailProtocol"] = proto
+		if in["port"] == nil {
+			in["port"] = float64(def)
+		} else if p, _ := in["port"].(float64); p == 25 {
+			return 400, errBody(400, "BAD_REQUEST", "Port 25 cannot be monitored: the checking locations' cloud providers block it.")
+		}
+	} else {
+		in["mailProtocol"] = nil
+	}
+	if typ == "MAIL_AUTH" {
+		mode, _ := in["requiredMtaStsMode"].(string)
+		mode = strings.ToLower(strings.TrimSpace(mode))
+		if mode != "" && mode != "testing" && mode != "enforce" {
+			return 400, errBody(400, "BAD_REQUEST", "requiredMtaStsMode must be testing, enforce or empty")
+		}
+		if mode == "" {
+			in["requiredMtaStsMode"] = nil
+		} else {
+			in["requiredMtaStsMode"] = mode
+		}
+		if in["checkBlacklists"] == nil {
+			in["checkBlacklists"] = false
+		}
+	} else {
+		in["requiredMtaStsMode"] = nil
+		in["checkBlacklists"] = false
+	}
 	if typ == "HTTPS" && in["port"] == nil {
 		if strings.HasPrefix(url, "https://") {
 			in["port"] = float64(443)
@@ -376,6 +418,8 @@ func (s *Server) normalize(in, existing map[string]any) (int, any) {
 	}
 	return 0, nil
 }
+
+var mailPorts = map[string]int{"SUBMISSION": 587, "SMTPS": 465, "IMAP": 143, "IMAPS": 993, "POP3": 110, "POP3S": 995}
 
 // masked is the monitor as the API serialises it: credential header values masked.
 func masked(m map[string]any) map[string]any {

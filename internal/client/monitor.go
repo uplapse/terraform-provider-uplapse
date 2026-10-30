@@ -12,8 +12,20 @@ import (
 // Monitor types the API accepts (uptime-api enums/MonitorType.java).
 var MonitorTypes = []string{
 	"HTTPS", "API", "KEYWORD", "PING", "PORT", "TCP", "SSH", "DNS", "TLS_CERT", "HEARTBEAT",
-	"DOMAIN_EXPIRY", "MAIL_AUTH", "CERT_TRANSPARENCY", "JOURNEY", "BROWSER", "FORM",
+	"DOMAIN_EXPIRY", "MAIL_AUTH", "MAIL_SERVER", "CERT_TRANSPARENCY", "JOURNEY", "BROWSER", "FORM",
 }
+
+// MailProtocols are the protocols a MAIL_SERVER monitor speaks, with the port each uses when none is given
+// (uptime-api MonitorService.MAIL_PORTS). Port 25 is missing on purpose: the checking locations cannot reach it.
+var MailProtocols = map[string]int64{
+	"SUBMISSION": 587, "SMTPS": 465, "IMAP": 143, "IMAPS": 993, "POP3": 110, "POP3S": 995,
+}
+
+// MailProtocolNames lists MailProtocols' keys in a fixed order, for validators and documentation.
+var MailProtocolNames = []string{"SUBMISSION", "SMTPS", "IMAP", "IMAPS", "POP3", "POP3S"}
+
+// MtaStsModes are the MTA-STS modes a MAIL_AUTH monitor can require.
+var MtaStsModes = []string{"testing", "enforce"}
 
 // DNSRecordTypes are the record types a DNS monitor may query.
 var DNSRecordTypes = []string{"A", "AAAA", "CNAME", "TXT", "MX", "NS", "CAA"}
@@ -47,6 +59,9 @@ type Monitor struct {
 	MinTLSDaysLeft        *int64               `json:"minTlsDaysLeft"`
 	MinDomainDaysLeft     *int64               `json:"minDomainDaysLeft"`
 	HeartbeatGraceSeconds *int64               `json:"heartbeatGraceSeconds"`
+	MailProtocol          *string              `json:"mailProtocol"`
+	RequiredMtaStsMode    *string              `json:"requiredMtaStsMode"`
+	CheckBlacklists       *bool                `json:"checkBlacklists"`
 	TrackConfigChanges    bool                 `json:"trackConfigChanges"`
 	Status                string               `json:"status"`
 	StatusReason          *string              `json:"statusReason"`
@@ -118,6 +133,9 @@ type MonitorInput struct {
 	MinTLSDaysLeft        *int64             `json:"minTlsDaysLeft"`
 	MinDomainDaysLeft     *int64             `json:"minDomainDaysLeft"`
 	HeartbeatGraceSeconds *int64             `json:"heartbeatGraceSeconds,omitempty"`
+	MailProtocol          *string            `json:"mailProtocol"`
+	RequiredMtaStsMode    *string            `json:"requiredMtaStsMode"`
+	CheckBlacklists       *bool              `json:"checkBlacklists,omitempty"`
 	TrackConfigChanges    *bool              `json:"trackConfigChanges,omitempty"`
 	Status                *string            `json:"status,omitempty"`
 	Locations             []City             `json:"locations"`
@@ -126,6 +144,10 @@ type MonitorInput struct {
 	Tags                  []string           `json:"tags"`
 	Request               *RequestDetails    `json:"request,omitempty"`
 	Notification          *NotificationInput `json:"notification,omitempty"`
+
+	// ResetPort sends the port as empty on an update, so the API picks the default again (after the type, the URL
+	// scheme or the mail protocol changed). Without it a nil Port keeps the stored one.
+	ResetPort bool `json:"-"`
 }
 
 // NotificationInput changes alert recipients. A nil list is left as stored; an empty one removes them all.
@@ -201,6 +223,9 @@ func (c *Client) UpdateMonitor(ctx context.Context, id int64, in *MonitorInput) 
 			}
 		}
 		current[k] = v
+	}
+	if in.ResetPort && in.Port == nil {
+		current["port"] = nil
 	}
 	current["id"] = id
 

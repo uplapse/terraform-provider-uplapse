@@ -107,6 +107,26 @@ resource "uplapse_monitor" "domain" {
   interval             = 86400
 }
 
+# The domain's email authentication: SPF and DMARC, plus MTA-STS in enforce mode and an IP blacklist watch on its
+# mail servers.
+resource "uplapse_monitor" "email_auth" {
+  name                  = "Email authentication"
+  type                  = "MAIL_AUTH"
+  url                   = "example.com"
+  required_mta_sts_mode = "enforce"
+  check_blacklists      = true
+  interval              = 3600
+}
+
+# A mailbox server: TLS on IMAPS (port 993 by default) and its certificate. Add a username and password in the app
+# (Advanced > Authentication) to check that logging in works too.
+resource "uplapse_monitor" "imap" {
+  name          = "Mailbox server"
+  type          = "MAIL_SERVER"
+  url           = "imap.example.com"
+  mail_protocol = "IMAPS"
+}
+
 # A job that must report in once a day: call heartbeat_url when it finishes.
 resource "uplapse_monitor" "backup" {
   name                    = "Nightly backup"
@@ -132,12 +152,13 @@ variable "health_token" {
 ### Required
 
 - `name` (String) Monitor name, unique within the organisation (up to 255 characters).
-- `type` (String) Check type: `HTTPS`, `API`, `KEYWORD`, `PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `HEARTBEAT`, `DOMAIN_EXPIRY`, `MAIL_AUTH`, `CERT_TRANSPARENCY`, `JOURNEY`, `BROWSER`, `FORM`. `HTTPS` covers plain HTTP too; `API` is an HTTP check with request settings; `PORT` only connects, `TCP` also sends `tcp_payload` and expects `tcp_expect`.
+- `type` (String) Check type: `HTTPS`, `API`, `KEYWORD`, `PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `HEARTBEAT`, `DOMAIN_EXPIRY`, `MAIL_AUTH`, `MAIL_SERVER`, `CERT_TRANSPARENCY`, `JOURNEY`, `BROWSER`, `FORM`. `HTTPS` covers plain HTTP too; `API` is an HTTP check with request settings; `PORT` only connects, `TCP` also sends `tcp_payload` and expects `tcp_expect`.
 
 ### Optional
 
 - `alert_contact_group_ids` (Set of Number) Ids of contact groups alerted when the monitor fails. Left out, the groups chosen in the app are kept; set `[]` to remove them all.
 - `alert_user_ids` (Set of Number) Ids of the organisation's users alerted when the monitor fails. Left out, the recipients chosen in the app are kept; set `[]` to remove them all.
+- `check_blacklists` (Boolean) `MAIL_AUTH`: also fail when one of the domain's mail server addresses is on a public IP blacklist (SpamCop, Barracuda, PSBL, Mailspike, UCEPROTECT level 1, DroneBL).
 - `dns_record_type` (String) `DNS`: record type to resolve: `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `CAA`.
 - `expected_dns` (String) `DNS`: answer the record must contain (MX answers are `"<preference> <host>"`).
 - `expected_status` (Number) HTTP status code the response must have (100-599).
@@ -147,18 +168,20 @@ variable "health_token" {
 - `location_target_type` (String) Check from a broader area instead of listed cities: `COUNTRY` (value: country id), `CONTINENT` (value: continent name), `PRIVATE` (value: private location id), or `CITY` (value: city id).
 - `location_target_value` (String) Value for `location_target_type`.
 - `locations` (Set of Number) Ids of the cities to check from (see the `uplapse_locations` data source). Several cities are checked on every run. How many a monitor may use depends on the plan.
+- `mail_protocol` (String) `MAIL_SERVER`: the protocol to check: `SUBMISSION`, `SMTPS`, `IMAP`, `IMAPS`, `POP3`, `POP3S`. The check reads the greeting, sets up TLS (STARTTLS on `SUBMISSION`, `IMAP` and `POP3`) and checks the certificate. With a username and password set in the app (Advanced > Authentication) it also logs in; it never sends or reads mail.
 - `min_domain_days_left` (Number) `DOMAIN_EXPIRY`: fail once fewer days than this remain on the domain registration.
 - `min_tls_days_left` (Number) `TLS_CERT`: fail once fewer days than this remain on the certificate.
 - `path` (String) Request path kept apart from `url` (`API` and `KEYWORD` monitors). Must start with `/`.
 - `paused` (Boolean) Pause the monitor: no checks and no alerts. The API refuses to pause a monitor that is down outside a maintenance window.
-- `port` (Number) Port. Required for `PORT` and `TCP`; `HTTPS` monitors default to 443 or 80 from the URL scheme.
+- `port` (Number) Port. Required for `PORT` and `TCP`; `HTTPS` monitors default to 443 or 80 from the URL scheme, `MAIL_SERVER` monitors to the protocol's port (587, 465, 143, 993, 110 or 995). Port 25 cannot be monitored.
 - `request` (Attributes) HTTP request settings for `HTTPS`, `API` and `KEYWORD` monitors. When the block is left out, request settings made in the app are kept. (see [below for nested schema](#nestedatt--request))
+- `required_mta_sts_mode` (String) `MAIL_AUTH`: fail unless the domain publishes MTA-STS in at least this mode: `testing` or `enforce`. Left out, MTA-STS is reported but not required.
 - `tags` (Set of String) Free-form tags.
 - `tcp_expect` (String) `TCP`: text the response must contain. Without it a `TCP` check is just `PORT`.
 - `tcp_payload` (String) `TCP`: data written after connecting.
 - `timeout` (Number) Seconds before a check gives up (1-300, not longer than `interval`).
 - `track_config_changes` (Boolean) Record DNS, TLS and security-header snapshots and report changes between checks.
-- `url` (String) What to check: an `http(s)://` address for HTTP-family types, a host name for `PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `DOMAIN_EXPIRY`. Required for every type except `HEARTBEAT`. Hosts on internal networks are refused.
+- `url` (String) What to check: an `http(s)://` address for HTTP-family types, a host name for `PING`, `PORT`, `TCP`, `SSH`, `DNS`, `TLS_CERT`, `DOMAIN_EXPIRY` and `MAIL_SERVER`, a domain for `MAIL_AUTH`. Required for every type except `HEARTBEAT`. Hosts on internal networks are refused.
 
 ### Read-Only
 

@@ -89,6 +89,26 @@ resource "uplapse_monitor" "domain" {
   interval             = 86400
 }
 
+# The domain's email authentication: SPF and DMARC, plus MTA-STS in enforce mode and an IP blacklist watch on its
+# mail servers.
+resource "uplapse_monitor" "email_auth" {
+  name                  = "Email authentication"
+  type                  = "MAIL_AUTH"
+  url                   = "example.com"
+  required_mta_sts_mode = "enforce"
+  check_blacklists      = true
+  interval              = 3600
+}
+
+# A mailbox server: TLS on IMAPS (port 993 by default) and its certificate. Add a username and password in the app
+# (Advanced > Authentication) to check that logging in works too.
+resource "uplapse_monitor" "imap" {
+  name          = "Mailbox server"
+  type          = "MAIL_SERVER"
+  url           = "imap.example.com"
+  mail_protocol = "IMAPS"
+}
+
 # A job that must report in once a day: call heartbeat_url when it finishes.
 resource "uplapse_monitor" "backup" {
   name                    = "Nightly backup"
