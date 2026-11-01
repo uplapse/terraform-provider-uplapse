@@ -159,6 +159,33 @@ func TestCreateSendsNullsForClearedFields(t *testing.T) {
 	if _, ok := body["request"]; ok {
 		t.Errorf("an unmanaged request should not be sent")
 	}
+	if _, ok := body["agentMonitor"]; ok {
+		t.Errorf("an unset agentMonitor should be left to the API")
+	}
+}
+
+func TestCreateSendsAgentHeartbeatFields(t *testing.T) {
+	var body map[string]any
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		_, _ = io.WriteString(w, `{"id":4,"name":"agent","type":"HEARTBEAT","status":"ACTIVE","agentMonitor":true,
+			"agentMaxCostPerHour":2.5,"agentMaxConsecutiveFailures":3,"agentCostCurrency":"USD"}`)
+	})
+	agent, cost, failures, currency := true, 2.5, int64(3), "USD"
+	m, err := c.CreateMonitor(context.Background(), &MonitorInput{
+		Name: "agent", Type: "HEARTBEAT", AgentMonitor: &agent, AgentMaxCostPerHour: &cost,
+		AgentMaxConsecutiveFailures: &failures, AgentCostCurrency: &currency,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body["agentMonitor"] != true || body["agentMaxCostPerHour"] != 2.5 || body["agentMaxConsecutiveFailures"] != float64(3) || body["agentCostCurrency"] != "USD" {
+		t.Errorf("agent fields not sent as the API names them: %v", body)
+	}
+	if m.AgentMonitor == nil || !*m.AgentMonitor || m.AgentMaxCostPerHour == nil || *m.AgentMaxCostPerHour != 2.5 ||
+		m.AgentMaxConsecutiveFailures == nil || *m.AgentMaxConsecutiveFailures != 3 || m.AgentCostCurrency == nil || *m.AgentCostCurrency != "USD" {
+		t.Errorf("agent fields not read back: %+v", m)
+	}
 }
 
 // UpdateMonitor reads the stored monitor and overlays the input: unmodelled settings and nested row ids survive.

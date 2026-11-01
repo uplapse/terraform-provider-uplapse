@@ -15,37 +15,41 @@ import (
 )
 
 type monitorModel struct {
-	ID                    types.String `tfsdk:"id"`
-	Name                  types.String `tfsdk:"name"`
-	Type                  types.String `tfsdk:"type"`
-	URL                   types.String `tfsdk:"url"`
-	Path                  types.String `tfsdk:"path"`
-	Port                  types.Int64  `tfsdk:"port"`
-	Interval              types.Int64  `tfsdk:"interval"`
-	Timeout               types.Int64  `tfsdk:"timeout"`
-	Locations             types.Set    `tfsdk:"locations"`
-	LocationTargetType    types.String `tfsdk:"location_target_type"`
-	LocationTargetValue   types.String `tfsdk:"location_target_value"`
-	Keyword               types.String `tfsdk:"keyword"`
-	ExpectedStatus        types.Int64  `tfsdk:"expected_status"`
-	TCPPayload            types.String `tfsdk:"tcp_payload"`
-	TCPExpect             types.String `tfsdk:"tcp_expect"`
-	DNSRecordType         types.String `tfsdk:"dns_record_type"`
-	ExpectedDNS           types.String `tfsdk:"expected_dns"`
-	MinTLSDaysLeft        types.Int64  `tfsdk:"min_tls_days_left"`
-	MinDomainDaysLeft     types.Int64  `tfsdk:"min_domain_days_left"`
-	HeartbeatGraceSeconds types.Int64  `tfsdk:"heartbeat_grace_seconds"`
-	HeartbeatURL          types.String `tfsdk:"heartbeat_url"`
-	MailProtocol          types.String `tfsdk:"mail_protocol"`
-	RequiredMtaStsMode    types.String `tfsdk:"required_mta_sts_mode"`
-	CheckBlacklists       types.Bool   `tfsdk:"check_blacklists"`
-	TrackConfigChanges    types.Bool   `tfsdk:"track_config_changes"`
-	Paused                types.Bool   `tfsdk:"paused"`
-	Status                types.String `tfsdk:"status"`
-	Tags                  types.Set    `tfsdk:"tags"`
-	Request               types.Object `tfsdk:"request"`
-	AlertUserIDs          types.Set    `tfsdk:"alert_user_ids"`
-	AlertContactGroupIDs  types.Set    `tfsdk:"alert_contact_group_ids"`
+	ID                          types.String  `tfsdk:"id"`
+	Name                        types.String  `tfsdk:"name"`
+	Type                        types.String  `tfsdk:"type"`
+	URL                         types.String  `tfsdk:"url"`
+	Path                        types.String  `tfsdk:"path"`
+	Port                        types.Int64   `tfsdk:"port"`
+	Interval                    types.Int64   `tfsdk:"interval"`
+	Timeout                     types.Int64   `tfsdk:"timeout"`
+	Locations                   types.Set     `tfsdk:"locations"`
+	LocationTargetType          types.String  `tfsdk:"location_target_type"`
+	LocationTargetValue         types.String  `tfsdk:"location_target_value"`
+	Keyword                     types.String  `tfsdk:"keyword"`
+	ExpectedStatus              types.Int64   `tfsdk:"expected_status"`
+	TCPPayload                  types.String  `tfsdk:"tcp_payload"`
+	TCPExpect                   types.String  `tfsdk:"tcp_expect"`
+	DNSRecordType               types.String  `tfsdk:"dns_record_type"`
+	ExpectedDNS                 types.String  `tfsdk:"expected_dns"`
+	MinTLSDaysLeft              types.Int64   `tfsdk:"min_tls_days_left"`
+	MinDomainDaysLeft           types.Int64   `tfsdk:"min_domain_days_left"`
+	HeartbeatGraceSeconds       types.Int64   `tfsdk:"heartbeat_grace_seconds"`
+	HeartbeatURL                types.String  `tfsdk:"heartbeat_url"`
+	AgentMonitor                types.Bool    `tfsdk:"agent_monitor"`
+	AgentMaxCostPerHour         types.Float64 `tfsdk:"agent_max_cost_per_hour"`
+	AgentMaxConsecutiveFailures types.Int64   `tfsdk:"agent_max_consecutive_failures"`
+	AgentCostCurrency           types.String  `tfsdk:"agent_cost_currency"`
+	MailProtocol                types.String  `tfsdk:"mail_protocol"`
+	RequiredMtaStsMode          types.String  `tfsdk:"required_mta_sts_mode"`
+	CheckBlacklists             types.Bool    `tfsdk:"check_blacklists"`
+	TrackConfigChanges          types.Bool    `tfsdk:"track_config_changes"`
+	Paused                      types.Bool    `tfsdk:"paused"`
+	Status                      types.String  `tfsdk:"status"`
+	Tags                        types.Set     `tfsdk:"tags"`
+	Request                     types.Object  `tfsdk:"request"`
+	AlertUserIDs                types.Set     `tfsdk:"alert_user_ids"`
+	AlertContactGroupIDs        types.Set     `tfsdk:"alert_contact_group_ids"`
 }
 
 type requestModel struct {
@@ -95,6 +99,10 @@ func (m *monitorModel) toInput(ctx context.Context) (*client.MonitorInput, diag.
 	}
 	if m.Type.ValueString() == "HEARTBEAT" {
 		in.HeartbeatGraceSeconds = intPtr(m.HeartbeatGraceSeconds)
+		in.AgentMonitor = boolPtr(m.AgentMonitor)
+		in.AgentMaxCostPerHour = floatPtr(m.AgentMaxCostPerHour)
+		in.AgentMaxConsecutiveFailures = intPtr(m.AgentMaxConsecutiveFailures)
+		in.AgentCostCurrency = strPtr(m.AgentCostCurrency)
 	}
 	if !m.TrackConfigChanges.IsUnknown() && !m.TrackConfigChanges.IsNull() {
 		v := m.TrackConfigChanges.ValueBool()
@@ -179,6 +187,14 @@ func (m *monitorModel) apply(ctx context.Context, api *client.Monitor, importing
 	m.MinTLSDaysLeft = intValue(api.MinTLSDaysLeft)
 	m.MinDomainDaysLeft = intValue(api.MinDomainDaysLeft)
 	m.HeartbeatGraceSeconds = intValue(api.HeartbeatGraceSeconds)
+	m.AgentMonitor = types.BoolValue(api.AgentMonitor != nil && *api.AgentMonitor)
+	m.AgentMaxCostPerHour = floatValue(api.AgentMaxCostPerHour)
+	m.AgentMaxConsecutiveFailures = intValue(api.AgentMaxConsecutiveFailures)
+	// The API nulls the currency when the heartbeat is not an agent monitor; the attribute's default stands in.
+	m.AgentCostCurrency = strValue(api.AgentCostCurrency)
+	if m.AgentCostCurrency.IsNull() {
+		m.AgentCostCurrency = types.StringValue(defaultAgentCostCurrency)
+	}
 	m.MailProtocol = strValue(api.MailProtocol)
 	m.RequiredMtaStsMode = strValue(api.RequiredMtaStsMode)
 	m.CheckBlacklists = types.BoolValue(api.CheckBlacklists != nil && *api.CheckBlacklists)
@@ -333,6 +349,14 @@ func intPtr(v types.Int64) *int64 {
 	return &i
 }
 
+func floatPtr(v types.Float64) *float64 {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	f := v.ValueFloat64()
+	return &f
+}
+
 func boolPtr(v types.Bool) *bool {
 	if v.IsNull() || v.IsUnknown() {
 		return nil
@@ -354,6 +378,13 @@ func intValue(i *int64) types.Int64 {
 		return types.Int64Null()
 	}
 	return types.Int64Value(*i)
+}
+
+func floatValue(f *float64) types.Float64 {
+	if f == nil {
+		return types.Float64Null()
+	}
+	return types.Float64Value(*f)
 }
 
 func boolValue(b *bool) types.Bool {

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -38,6 +40,9 @@ type monitorResource struct {
 }
 
 var httpMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
+// defaultAgentCostCurrency is what the API stores when an agent monitor names no currency.
+const defaultAgentCostCurrency = "USD"
 
 func (r *monitorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_monitor"
@@ -172,6 +177,38 @@ func (r *monitorResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 				Sensitive:           true,
 				PlanModifiers:       []planmodifier.String{useStateWhileTypeUnchanged{}},
+			},
+			"agent_monitor": schema.BoolAttribute{
+				MarkdownDescription: "`HEARTBEAT`: the heartbeat tracks an AI agent. Pings may carry a run outcome, tokens and cost " +
+					"(`state`, `runId`, `inputTokens`, `outputTokens`, `cost`, `model`); `agent_max_cost_per_hour` and " +
+					"`agent_max_consecutive_failures` are evaluated on every finished run. " +
+					"Counts against the plan's agent monitor limit.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+			},
+			"agent_max_cost_per_hour": schema.Float64Attribute{
+				MarkdownDescription: "`HEARTBEAT`: with `agent_monitor`, fail (alert source `agent_cost_ceiling`) when the cost of runs " +
+					"finished in the last 60 minutes exceeds this, in `agent_cost_currency`. Left out, cost is not limited.",
+				Optional:   true,
+				Validators: []validator.Float64{float64validator.AtLeast(0)},
+			},
+			"agent_max_consecutive_failures": schema.Int64Attribute{
+				MarkdownDescription: "`HEARTBEAT`: with `agent_monitor`, a failed run only fails the monitor once this many runs in a row " +
+					"have failed (1-1000, alert source `agent_failure_streak`); earlier failures are recorded as `agent_run_failed` without " +
+					"an alert. Left out, every failed run fails the monitor, as for a job.",
+				Optional:   true,
+				Validators: []validator.Int64{int64validator.Between(1, 1000)},
+			},
+			"agent_cost_currency": schema.StringAttribute{
+				MarkdownDescription: "`HEARTBEAT`: with `agent_monitor`, the 3-letter currency code the agent reports `cost` in " +
+					"(display only, default `USD`).",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(defaultAgentCostCurrency),
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Z]{3}$`), "must be a 3-letter upper-case currency code such as USD"),
+				},
 			},
 			"mail_protocol": schema.StringAttribute{
 				MarkdownDescription: "`MAIL_SERVER`: the protocol to check: `" + strings.Join(client.MailProtocolNames, "`, `") + "`. " +
@@ -315,6 +352,23 @@ func (r *monitorResource) ValidateConfig(ctx context.Context, req resource.Valid
 		if !m.CheckBlacklists.IsNull() && !m.CheckBlacklists.IsUnknown() && m.CheckBlacklists.ValueBool() {
 			resp.Diagnostics.AddAttributeError(path.Root("check_blacklists"), "check_blacklists not used",
 				"check_blacklists only applies to MAIL_AUTH monitors.")
+		}
+	}
+	// The API nulls the agent settings unless the monitor is an agent heartbeat, so a value elsewhere would never apply.
+	agent := !m.AgentMonitor.IsNull() && !m.AgentMonitor.IsUnknown() && m.AgentMonitor.ValueBool()
+	if typ != "HEARTBEAT" && agent {
+		resp.Diagnostics.AddAttributeError(path.Root("agent_monitor"), "agent_monitor not used", "agent_monitor only applies to HEARTBEAT monitors.")
+	}
+	if !agent && !m.AgentMonitor.IsUnknown() {
+		for name, set := range map[string]bool{
+			"agent_max_cost_per_hour":        !m.AgentMaxCostPerHour.IsNull(),
+			"agent_max_consecutive_failures": !m.AgentMaxConsecutiveFailures.IsNull(),
+			"agent_cost_currency":            !m.AgentCostCurrency.IsNull(),
+		} {
+			if set {
+				resp.Diagnostics.AddAttributeError(path.Root(name), name+" needs agent_monitor",
+					name+" only applies to HEARTBEAT monitors with agent_monitor = true.")
+			}
 		}
 	}
 	if typ == "KEYWORD" && m.Keyword.IsNull() {

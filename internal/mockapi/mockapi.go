@@ -1,6 +1,6 @@
 // Package mockapi is an in-memory stand-in for the parts of the Uplapse API the provider calls. It mirrors the
 // behaviour that matters to Terraform: full-replacement PUT that keeps omitted nested objects, defaults the API
-// fills in (status, interval, HTTPS port, heartbeat grace), masked credential headers, nested row ids that must match,
+// fills in (status, interval, HTTPS port, heartbeat grace, agent currency), masked credential headers, nested row ids that must match,
 // plan-limit errors and 404s. Tests use it through httptest; cmd/mockserver serves it for manual runs.
 package mockapi
 
@@ -386,9 +386,16 @@ func (s *Server) normalize(in, existing map[string]any) (int, any) {
 		} else {
 			in["heartbeatKey"] = fmt.Sprintf("hb%dkey", s.nextID+1)
 		}
+		if code, msg := normalizeAgent(in); code != 0 {
+			return code, msg
+		}
 	} else {
 		delete(in, "heartbeatGraceSeconds")
 		delete(in, "heartbeatKey")
+		in["agentMonitor"] = false
+		in["agentMaxCostPerHour"] = nil
+		in["agentMaxConsecutiveFailures"] = nil
+		in["agentCostCurrency"] = nil
 	}
 	if dt, ok := in["dnsRecordType"].(string); ok {
 		in["dnsRecordType"] = strings.ToUpper(dt)
@@ -416,6 +423,34 @@ func (s *Server) normalize(in, existing map[string]any) (int, any) {
 	if _, ok := in["trackConfigChanges"]; !ok {
 		in["trackConfigChanges"] = false
 	}
+	return 0, nil
+}
+
+// normalizeAgent applies the agent heartbeat rules of MonitorService.save: the three agent settings are validated and
+// kept for an agent monitor and nulled for a plain job heartbeat.
+func normalizeAgent(in map[string]any) (int, any) {
+	if agent, _ := in["agentMonitor"].(bool); !agent {
+		in["agentMonitor"] = false
+		in["agentMaxCostPerHour"] = nil
+		in["agentMaxConsecutiveFailures"] = nil
+		in["agentCostCurrency"] = nil
+		return 0, nil
+	}
+	if cost, ok := in["agentMaxCostPerHour"].(float64); ok && cost < 0 {
+		return 400, errBody(400, "BAD_REQUEST", "agentMaxCostPerHour must be 0 or more")
+	}
+	if n, ok := in["agentMaxConsecutiveFailures"].(float64); ok && (n < 1 || n > 1000) {
+		return 400, errBody(400, "BAD_REQUEST", "agentMaxConsecutiveFailures must be between 1 and 1000")
+	}
+	cur, _ := in["agentCostCurrency"].(string)
+	cur = strings.ToUpper(strings.TrimSpace(cur))
+	if cur == "" {
+		cur = "USD"
+	}
+	if len(cur) != 3 {
+		return 400, errBody(400, "BAD_REQUEST", "agentCostCurrency must be a 3-letter code")
+	}
+	in["agentCostCurrency"] = cur
 	return 0, nil
 }
 

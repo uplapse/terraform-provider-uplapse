@@ -42,35 +42,39 @@ const Mask = "********"
 
 // Monitor is a monitor as the API returns it (MonitorDTO). Fields the provider does not use are left out.
 type Monitor struct {
-	ID                    int64                `json:"id"`
-	Name                  string               `json:"name"`
-	Type                  string               `json:"type"`
-	URL                   *string              `json:"url"`
-	Path                  *string              `json:"path"`
-	Port                  *int64               `json:"port"`
-	Interval              *int64               `json:"interval"`
-	Timeout               *int64               `json:"timeout"`
-	Keyword               *string              `json:"keyword"`
-	ExpectedStatus        *int64               `json:"expectedStatus"`
-	TCPPayload            *string              `json:"tcpPayload"`
-	TCPExpect             *string              `json:"tcpExpect"`
-	DNSRecordType         *string              `json:"dnsRecordType"`
-	ExpectedDNS           *string              `json:"expectedDns"`
-	MinTLSDaysLeft        *int64               `json:"minTlsDaysLeft"`
-	MinDomainDaysLeft     *int64               `json:"minDomainDaysLeft"`
-	HeartbeatGraceSeconds *int64               `json:"heartbeatGraceSeconds"`
-	MailProtocol          *string              `json:"mailProtocol"`
-	RequiredMtaStsMode    *string              `json:"requiredMtaStsMode"`
-	CheckBlacklists       *bool                `json:"checkBlacklists"`
-	TrackConfigChanges    bool                 `json:"trackConfigChanges"`
-	Status                string               `json:"status"`
-	StatusReason          *string              `json:"statusReason"`
-	Locations             []City               `json:"locations"`
-	LocationTargetType    *string              `json:"locationTargetType"`
-	LocationTargetValue   *string              `json:"locationTargetValue"`
-	Tags                  []string             `json:"tags"`
-	Request               *RequestDetails      `json:"request"`
-	Notification          *NotificationDetails `json:"notification"`
+	ID                          int64                `json:"id"`
+	Name                        string               `json:"name"`
+	Type                        string               `json:"type"`
+	URL                         *string              `json:"url"`
+	Path                        *string              `json:"path"`
+	Port                        *int64               `json:"port"`
+	Interval                    *int64               `json:"interval"`
+	Timeout                     *int64               `json:"timeout"`
+	Keyword                     *string              `json:"keyword"`
+	ExpectedStatus              *int64               `json:"expectedStatus"`
+	TCPPayload                  *string              `json:"tcpPayload"`
+	TCPExpect                   *string              `json:"tcpExpect"`
+	DNSRecordType               *string              `json:"dnsRecordType"`
+	ExpectedDNS                 *string              `json:"expectedDns"`
+	MinTLSDaysLeft              *int64               `json:"minTlsDaysLeft"`
+	MinDomainDaysLeft           *int64               `json:"minDomainDaysLeft"`
+	HeartbeatGraceSeconds       *int64               `json:"heartbeatGraceSeconds"`
+	AgentMonitor                *bool                `json:"agentMonitor"`
+	AgentMaxCostPerHour         *float64             `json:"agentMaxCostPerHour"`
+	AgentMaxConsecutiveFailures *int64               `json:"agentMaxConsecutiveFailures"`
+	AgentCostCurrency           *string              `json:"agentCostCurrency"`
+	MailProtocol                *string              `json:"mailProtocol"`
+	RequiredMtaStsMode          *string              `json:"requiredMtaStsMode"`
+	CheckBlacklists             *bool                `json:"checkBlacklists"`
+	TrackConfigChanges          bool                 `json:"trackConfigChanges"`
+	Status                      string               `json:"status"`
+	StatusReason                *string              `json:"statusReason"`
+	Locations                   []City               `json:"locations"`
+	LocationTargetType          *string              `json:"locationTargetType"`
+	LocationTargetValue         *string              `json:"locationTargetValue"`
+	Tags                        []string             `json:"tags"`
+	Request                     *RequestDetails      `json:"request"`
+	Notification                *NotificationDetails `json:"notification"`
 }
 
 // City is a check location as a monitor carries it (CityDTO).
@@ -117,33 +121,38 @@ type Ref struct {
 // as stored when nil: the provider uses that for values the API computes (interval, timeout, port, status).
 // Request and Notification are only sent when the configuration manages them.
 type MonitorInput struct {
-	Name                  string             `json:"name"`
-	Type                  string             `json:"type"`
-	URL                   *string            `json:"url"`
-	Path                  *string            `json:"path"`
-	Port                  *int64             `json:"port,omitempty"`
-	Interval              *int64             `json:"interval,omitempty"`
-	Timeout               *int64             `json:"timeout,omitempty"`
-	Keyword               *string            `json:"keyword"`
-	ExpectedStatus        *int64             `json:"expectedStatus"`
-	TCPPayload            *string            `json:"tcpPayload"`
-	TCPExpect             *string            `json:"tcpExpect"`
-	DNSRecordType         *string            `json:"dnsRecordType"`
-	ExpectedDNS           *string            `json:"expectedDns"`
-	MinTLSDaysLeft        *int64             `json:"minTlsDaysLeft"`
-	MinDomainDaysLeft     *int64             `json:"minDomainDaysLeft"`
-	HeartbeatGraceSeconds *int64             `json:"heartbeatGraceSeconds,omitempty"`
-	MailProtocol          *string            `json:"mailProtocol"`
-	RequiredMtaStsMode    *string            `json:"requiredMtaStsMode"`
-	CheckBlacklists       *bool              `json:"checkBlacklists,omitempty"`
-	TrackConfigChanges    *bool              `json:"trackConfigChanges,omitempty"`
-	Status                *string            `json:"status,omitempty"`
-	Locations             []City             `json:"locations"`
-	LocationTargetType    *string            `json:"locationTargetType"`
-	LocationTargetValue   *string            `json:"locationTargetValue"`
-	Tags                  []string           `json:"tags"`
-	Request               *RequestDetails    `json:"request,omitempty"`
-	Notification          *NotificationInput `json:"notification,omitempty"`
+	Name                  string  `json:"name"`
+	Type                  string  `json:"type"`
+	URL                   *string `json:"url"`
+	Path                  *string `json:"path"`
+	Port                  *int64  `json:"port,omitempty"`
+	Interval              *int64  `json:"interval,omitempty"`
+	Timeout               *int64  `json:"timeout,omitempty"`
+	Keyword               *string `json:"keyword"`
+	ExpectedStatus        *int64  `json:"expectedStatus"`
+	TCPPayload            *string `json:"tcpPayload"`
+	TCPExpect             *string `json:"tcpExpect"`
+	DNSRecordType         *string `json:"dnsRecordType"`
+	ExpectedDNS           *string `json:"expectedDns"`
+	MinTLSDaysLeft        *int64  `json:"minTlsDaysLeft"`
+	MinDomainDaysLeft     *int64  `json:"minDomainDaysLeft"`
+	HeartbeatGraceSeconds *int64  `json:"heartbeatGraceSeconds,omitempty"`
+	// Agent heartbeat rules. The API nulls the three settings when agentMonitor is false.
+	AgentMonitor                *bool              `json:"agentMonitor,omitempty"`
+	AgentMaxCostPerHour         *float64           `json:"agentMaxCostPerHour"`
+	AgentMaxConsecutiveFailures *int64             `json:"agentMaxConsecutiveFailures"`
+	AgentCostCurrency           *string            `json:"agentCostCurrency,omitempty"`
+	MailProtocol                *string            `json:"mailProtocol"`
+	RequiredMtaStsMode          *string            `json:"requiredMtaStsMode"`
+	CheckBlacklists             *bool              `json:"checkBlacklists,omitempty"`
+	TrackConfigChanges          *bool              `json:"trackConfigChanges,omitempty"`
+	Status                      *string            `json:"status,omitempty"`
+	Locations                   []City             `json:"locations"`
+	LocationTargetType          *string            `json:"locationTargetType"`
+	LocationTargetValue         *string            `json:"locationTargetValue"`
+	Tags                        []string           `json:"tags"`
+	Request                     *RequestDetails    `json:"request,omitempty"`
+	Notification                *NotificationInput `json:"notification,omitempty"`
 
 	// ResetPort sends the port as empty on an update, so the API picks the default again (after the type, the URL
 	// scheme or the mail protocol changed). Without it a nil Port keeps the stored one.

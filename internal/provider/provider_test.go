@@ -217,6 +217,15 @@ resource "uplapse_monitor" "hb" {
   interval = 86400
 }
 
+resource "uplapse_monitor" "agent" {
+  name                           = "Support agent"
+  type                           = "HEARTBEAT"
+  interval                       = 3600
+  agent_monitor                  = true
+  agent_max_cost_per_hour        = 12.5
+  agent_max_consecutive_failures = 3
+}
+
 resource "uplapse_monitor" "dns" {
   name            = "MX record"
   type            = "DNS"
@@ -261,6 +270,14 @@ resource "uplapse_monitor" "tls" {
 					resource.TestMatchResourceAttr("uplapse_monitor.hb", "heartbeat_url", regexp.MustCompile(`^http://127\.0\.0\.1:\d+/v1/heartbeat/\w+$`)),
 					resource.TestCheckResourceAttr("uplapse_monitor.hb", "heartbeat_grace_seconds", "60"),
 					resource.TestCheckNoResourceAttr("uplapse_monitor.hb", "url"),
+					resource.TestCheckResourceAttr("uplapse_monitor.hb", "agent_monitor", "false"),
+					resource.TestCheckNoResourceAttr("uplapse_monitor.hb", "agent_max_cost_per_hour"),
+					resource.TestCheckResourceAttr("uplapse_monitor.hb", "agent_cost_currency", "USD"),
+					resource.TestCheckResourceAttr("uplapse_monitor.agent", "agent_monitor", "true"),
+					resource.TestCheckResourceAttr("uplapse_monitor.agent", "agent_max_cost_per_hour", "12.5"),
+					resource.TestCheckResourceAttr("uplapse_monitor.agent", "agent_max_consecutive_failures", "3"),
+					resource.TestCheckResourceAttr("uplapse_monitor.agent", "agent_cost_currency", "USD"),
+					resource.TestMatchResourceAttr("uplapse_monitor.agent", "heartbeat_url", regexp.MustCompile(`^http://127\.0\.0\.1:\d+/v1/heartbeat/\w+$`)),
 					resource.TestCheckResourceAttr("uplapse_monitor.dns", "dns_record_type", "MX"),
 					resource.TestCheckNoResourceAttr("uplapse_monitor.dns", "port"),
 					resource.TestCheckResourceAttr("uplapse_monitor.tcp", "port", "25"),

@@ -122,6 +122,20 @@ output "backup_ping_url" {
   sensitive = true
 }
 
+# An AI agent that runs at least hourly: each run pings heartbeat_url with state=start, then state=success or
+# state=fail with its tokens and cost. Alerts when runs stop, when 3 runs in a row fail, or when the last hour's
+# runs cost more than 10 USD.
+resource "uplapse_monitor" "support_agent" {
+  name                           = "Support triage agent"
+  type                           = "HEARTBEAT"
+  interval                       = 3600
+  heartbeat_grace_seconds        = 600
+  agent_monitor                  = true
+  agent_max_cost_per_hour        = 10
+  agent_max_consecutive_failures = 3
+  agent_cost_currency            = "USD"
+}
+
 variable "health_token" {
   type      = string
   sensitive = true

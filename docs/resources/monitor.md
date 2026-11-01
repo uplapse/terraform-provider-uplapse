@@ -140,6 +140,20 @@ output "backup_ping_url" {
   sensitive = true
 }
 
+# An AI agent that runs at least hourly: each run pings heartbeat_url with state=start, then state=success or
+# state=fail with its tokens and cost. Alerts when runs stop, when 3 runs in a row fail, or when the last hour's
+# runs cost more than 10 USD.
+resource "uplapse_monitor" "support_agent" {
+  name                           = "Support triage agent"
+  type                           = "HEARTBEAT"
+  interval                       = 3600
+  heartbeat_grace_seconds        = 600
+  agent_monitor                  = true
+  agent_max_cost_per_hour        = 10
+  agent_max_consecutive_failures = 3
+  agent_cost_currency            = "USD"
+}
+
 variable "health_token" {
   type      = string
   sensitive = true
@@ -156,6 +170,10 @@ variable "health_token" {
 
 ### Optional
 
+- `agent_cost_currency` (String) `HEARTBEAT`: with `agent_monitor`, the 3-letter currency code the agent reports `cost` in (display only, default `USD`).
+- `agent_max_consecutive_failures` (Number) `HEARTBEAT`: with `agent_monitor`, a failed run only fails the monitor once this many runs in a row have failed (1-1000, alert source `agent_failure_streak`); earlier failures are recorded as `agent_run_failed` without an alert. Left out, every failed run fails the monitor, as for a job.
+- `agent_max_cost_per_hour` (Number) `HEARTBEAT`: with `agent_monitor`, fail (alert source `agent_cost_ceiling`) when the cost of runs finished in the last 60 minutes exceeds this, in `agent_cost_currency`. Left out, cost is not limited.
+- `agent_monitor` (Boolean) `HEARTBEAT`: the heartbeat tracks an AI agent. Pings may carry a run outcome, tokens and cost (`state`, `runId`, `inputTokens`, `outputTokens`, `cost`, `model`); `agent_max_cost_per_hour` and `agent_max_consecutive_failures` are evaluated on every finished run. Counts against the plan's agent monitor limit.
 - `alert_contact_group_ids` (Set of Number) Ids of contact groups alerted when the monitor fails. Left out, the groups chosen in the app are kept; set `[]` to remove them all.
 - `alert_user_ids` (Set of Number) Ids of the organisation's users alerted when the monitor fails. Left out, the recipients chosen in the app are kept; set `[]` to remove them all.
 - `check_blacklists` (Boolean) `MAIL_AUTH`: also fail when one of the domain's mail server addresses is on a public IP blacklist (SpamCop, Barracuda, PSBL, Mailspike, UCEPROTECT level 1, DroneBL).
