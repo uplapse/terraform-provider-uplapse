@@ -96,7 +96,7 @@ The Terraform Registry only publishes from a **public GitHub repository**. What 
    organisation or user that will own the namespace (`uplapse` gives the source address `uplapse/uplapse`; another
    owner changes the address and the `Address` in `main.go`). Push this repository's `main` branch to it. If the
    module path should follow the owner, change `github.com/uplapse/terraform-provider-uplapse` in `go.mod` and imports.
-2. **Licence.** Add a `LICENSE` file (HashiCorp's scaffolding uses MPL-2.0); none is chosen here.
+2. **Licence.** MPL-2.0 (`LICENSE`, chosen 6 Nov 2026, as in HashiCorp's provider scaffolding).
 3. **GPG signing key.** Generate an RSA or DSA key (the registry does not accept ECC keys):
    `gpg --full-generate-key` (RSA 4096), then export the private key `gpg --armor --export-secret-keys <KEY_ID>`
    and the public key `gpg --armor --export <KEY_ID>`. Keep the private key and passphrase in the password store.

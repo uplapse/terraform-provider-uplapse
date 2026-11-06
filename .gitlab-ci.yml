@@ -10,7 +10,8 @@ variables:
 
 test:
   stage: test
-  image: golang:1.26
+  image: golang:1.26.8-bookworm
+  tags: [upmonitor]
   cache:
     key:
       files: [go.sum]
